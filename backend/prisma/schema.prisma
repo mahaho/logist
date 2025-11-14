@@ -1,0 +1,277 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  dispatcher
+  accountant
+  mechanic
+}
+
+enum TractorStatus {
+  active
+  maintenance
+  inactive
+}
+
+enum FuelType {
+  diesel
+  gasoline
+  gas
+}
+
+enum TrailerType {
+  tent
+  refrigerator
+  curtain
+  board
+}
+
+enum TripStatus {
+  planned
+  in_progress
+  completed
+  cancelled
+}
+
+enum MaintenanceType {
+  scheduled
+  unscheduled
+}
+
+enum DocumentType {
+  // Driver documents
+  driver_license
+  medical_certificate
+  passport
+  driver_insurance
+  
+  // Transport documents
+  sts
+  pts
+  transport_insurance
+  diagnostic_card
+  service_book
+  certificate
+  
+  // Trip documents
+  contract
+  ttn
+  waybill
+  act
+  attachment
+}
+
+enum FinanceOperationType {
+  fuel
+  carWash
+  parking
+  perDiem
+  advance
+  salary
+  repair
+  maintenance
+  tolls
+  misc
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  maintenanceRecords Maintenance[]
+  financeOperations  FinanceOperation[]
+
+  @@map("users")
+}
+
+model Driver {
+  id          String   @id @default(uuid())
+  firstName   String
+  lastName    String
+  middleName  String?
+  phone       String
+  licenseNumber String
+  licenseExpiry DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  couplings         Coupling[]
+  trips             Trip[]
+  financeOperations FinanceOperation[]
+
+  @@map("drivers")
+}
+
+model Tractor {
+  id           String        @id @default(uuid())
+  brand        String
+  model        String
+  vin          String        @unique
+  plateNumber  String        @unique
+  mileage      Float         @default(0)
+  year         Int
+  status       TractorStatus @default(active)
+  fuelType     FuelType
+  consumption  Float
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  couplings         Coupling[]
+  trips             Trip[]
+  maintenanceRecords Maintenance[]
+  financeOperations FinanceOperation[]
+
+  @@map("tractors")
+}
+
+model Trailer {
+  id          String      @id @default(uuid())
+  type        TrailerType
+  model       String
+  plateNumber String      @unique
+  year        Int
+  mileage     Float       @default(0)
+  payload     Float
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  couplings         Coupling[]
+  trips             Trip[]
+  maintenanceRecords Maintenance[]
+  financeOperations FinanceOperation[]
+
+  @@map("trailers")
+}
+
+model Coupling {
+  id         String   @id @default(uuid())
+  tractorId  String
+  trailerId  String
+  driverId   String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  tractor Tractor @relation(fields: [tractorId], references: [id], onDelete: Cascade)
+  trailer Trailer @relation(fields: [trailerId], references: [id], onDelete: Cascade)
+  driver  Driver  @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  trips   Trip[]
+
+  @@map("couplings")
+}
+
+model Trip {
+  id          String     @id @default(uuid())
+  number      String     @unique
+  couplingId  String?
+  tractorId   String
+  trailerId   String
+  driverId    String
+  routeFrom   String
+  routeTo     String
+  departureDate DateTime
+  arrivalDate   DateTime?
+  mileage     Float      @default(0)
+  customer    String
+  cargoType   String
+  weight      Float
+  ratePerTon  Float
+  amount      Float
+  status      TripStatus @default(planned)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  coupling          Coupling?          @relation(fields: [couplingId], references: [id])
+  tractor           Tractor            @relation(fields: [tractorId], references: [id])
+  trailer            Trailer            @relation(fields: [trailerId], references: [id])
+  driver             Driver             @relation(fields: [driverId], references: [id])
+  financeOperations  FinanceOperation[]
+
+  @@map("trips")
+}
+
+model Maintenance {
+  id          String          @id @default(uuid())
+  type        MaintenanceType
+  entityType  String          // "tractor" | "trailer"
+  transportId String
+  date        DateTime
+  mileage     Float
+  tasks       String[]        // Array of task descriptions
+  materials   String[]        // Array of material names
+  cost        Float
+  mechanicId  String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // Relations
+  mechanic User @relation(fields: [mechanicId], references: [id])
+
+  @@map("maintenance")
+}
+
+model Document {
+  id         String       @id @default(uuid())
+  type       DocumentType
+  entityType String       // "tractor" | "trailer" | "driver" | "trip"
+  entityId   String
+  number     String?
+  issueDate  DateTime?
+  expiryDate DateTime?
+  filePath   String
+  fileName   String
+  mimeType   String?
+  size       Int?
+  description String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@map("documents")
+}
+
+model FinanceOperation {
+  id          String              @id @default(uuid())
+  type        FinanceOperationType
+  amount      Float
+  date        DateTime            @default(now())
+  driverId    String?
+  tripId      String?
+  tractorId   String?
+  trailerId   String?
+  description String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  // Relations
+  driver  Driver?  @relation(fields: [driverId], references: [id])
+  trip    Trip?    @relation(fields: [tripId], references: [id])
+  tractor Tractor? @relation(fields: [tractorId], references: [id])
+  trailer Trailer? @relation(fields: [trailerId], references: [id])
+  user    User?    @relation(fields: [userId], references: [id])
+  userId  String?
+
+  @@map("finance_operations")
+}
+
